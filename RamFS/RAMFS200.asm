@@ -12,16 +12,22 @@
 \ v1.04 30 May 2016 OSFILE with :5 correctly uses (&F6),Y instead of (&F8),Y
 \                   Save to :5 from second processor uses correct start address
 \ 
+\ v2.00 06 Jun 2019 New JIM API for use with updated DC firmware
+
+\ VER		=? 100				; Default to version 1.00
+VER		=? 200
 
 
-VER		=? 100				; Default to version 1.00
+JIM_DEVNO	= &DC				; new JIM API device number
 
 lastDrv		= &CF				;Last drive accessed
 
 vdip		= &FCF8
 vdipS		= &FCF9
-pageL		= &FCFF
-pageH		= &FCFE
+
+fred_jim_devno	= &FCFF
+fred_jim_page_lo= &FCFE
+fred_jim_page_hi= &FCFD
 
 \ Other Vectors
 
@@ -31,7 +37,7 @@ gsread		= &FFC5
 osfind		= &FFCE				;open/close file
 osbput		= &FFD4
 osbget		= &FFD7
-osargs		= &FFDA
+Myosargs		= &FFDA
 osfile		= &FFDD
 osrdch		= &FFE0
 osasci		= &FFE3
@@ -58,7 +64,15 @@ zpm4		= &B8
 zpm5		= &B9
 zpm6		= &BA
 zpm7		= &BB
+zp_mos_jimdevsave =  &EE			; mos jim device number save 
 
+SCRATCH_DEVSAVE = &FDDC				; saved device selector on entry used in case of a BRK
+
+MACRO	CLAIM_DEV
+	IF VER >= 200
+		JSR	DoClaimDev
+	ENDIF
+ENDMACRO
 
 ORG &8000
 
@@ -70,7 +84,7 @@ ORG &8000
 .ROMstart	BRK
 		BRK
 		BRK
-		JMP service01
+		JMP	ServiceEnt
 		EQUB	&82
 		EQUB	LO(cpyMsg)
 		EQUB	&10			;Version number 1.0x
@@ -91,10 +105,16 @@ ORG &8000
 	IF VER=104
 		EQUS	"1.04 (30 May 2016)"
 	ENDIF
+	IF VER=200
+		EQUS	"2.00 (6 June 2019)"
+	ENDIF
 .cpyMsg		BRK
 		EQUS	"(C)RetroClinic"
 		BRK
 		EQUS	"With thanks for additional code to J.G.Harston"
+	IF VER>=200
+		EQUS	" and Dossytronics"
+	ENDIF
 		BRK
 
 .jump_osfcv	JMP (osfcv)
@@ -140,6 +160,11 @@ ORG &8000
 		STA &0100,X
 		BMI prtRTS
 		BNE loop_8054
+
+	IF VER >= 200
+		JSR DoReleaseDevBrk		; our stack trickery will be ignored, force release
+	ENDIF
+		
 		JMP &0100
 \
 \
@@ -1155,7 +1180,7 @@ ORG &8000
 		STA &0103,X
 		JMP x83C3
 
-.x83D0		PHA
+.SaveXY		PHA
 		TXA
 		PHA
 		TYA
@@ -2929,12 +2954,13 @@ ORG &8000
 \************************************************
 \** Start of OSFIND Routine
 \
-.x8E78		CMP #&00			;Is it requesting a Close?
+.MyFindV	CLAIM_DEV
+		CMP #&00			;Is it requesting a Close?
 		BNE x8E82			;Jump if not
 		JSR saveAXY
 		JMP x8DC3
 
-.x8E82		JSR x83D0
+.x8E82		JSR SaveXY
 		STX &BC				;Store LSB of filename string
 		STY &BD				;Store MSB of filename string
 		STA &B4				;Store OSFIND type
@@ -3174,9 +3200,10 @@ ORG &8000
 \
 \
 \************************************************
-\** Start of OSARGS Routine
+\** Start of MyOSARGS Routine
 \
-.OSargs		JSR saveAXY			;Save the Registers
+.MyOSargs	CLAIM_DEV	
+		JSR saveAXY			;Save the Registers
 		CMP #&FF			;Is the call A=&FF?
 		BEQ x8FD7			;If so, do all outstanding Disk Updates
 		CPY #&00			;Is the Y register Y=&00?
@@ -3195,16 +3222,16 @@ ORG &8000
 		JSR stackClaim			;Change stacked A to &00
 		CMP #&00
 		BNE x9014a
-.x9014b		JMP osargs00			;Jump to OSARGS 00 routine
+.x9014b		JMP osargs00			;Jump to MyOSARGS 00 routine
 
 .x9014a		CMP #&04
-		BCS osargs45			;Jump to OSARGS 04 and 05 routine
+		BCS osargs45			;Jump to MyOSARGS 04 and 05 routine
 		CMP #&03
 		BEQ x9014b			;Read libfs, same as Read FS
 		CMP #&02
-		BEQ argsExit			;Exit if OSARGS 02
+		BEQ argsExit			;Exit if MyOSARGS 02
 \
-\** OSARGS 01 Handler
+\** MyOSARGS 01 Handler
 \
 		LDA #&FF
 		STA &02,X
@@ -3218,7 +3245,7 @@ ORG &8000
 
 .argsExit	RTS
 \
-\** OSARGS 04 and 05 Handler
+\** MyOSARGS 04 and 05 Handler
 \
 .osargs45	PHP				;Save stack - EQ = used, NE = free
 		TXA
@@ -3516,7 +3543,8 @@ ORG &8000
 \************************************************
 \** Start of OSBGET Routine
 \
-.x90C6		JSR x83D0			;Some sort of messing with SaveAXY Return address?
+.MyOSBget	CLAIM_DEV
+		JSR SaveXY			;Some sort of messing with SaveAXY Return address?
 		JSR x90AA			;Calculate current channel
 		TYA
 		JSR x930C
@@ -3663,7 +3691,8 @@ ORG &8000
 \************************************************
 \** Start of OSBPUT Routine
 \
-.x91AC		JSR saveAXY
+.MyOSBPut	CLAIM_DEV
+		JSR saveAXY
 		JSR x90AA
 
 .x91B2		PHA
@@ -3908,15 +3937,15 @@ ORG &8000
 		LDA #&00			;Ok, it's a power on boot
 		TAY
 		STA zpm0			;setup to format the drives
-.setR4		STA &FCFE			;starting with drive 0
+.setR4		STA fred_jim_page_hi		;starting with drive 0
 		LDA #&10
-		STA &FCFF
+		STA fred_jim_page_lo
 		TYA
 		
 .setR5		STA &FD00,Y			;Clear first page of directory
 		INY
 		BNE setR5
-		INC &FCFF
+		INC fred_jim_page_lo
 		
 .setR6		STA &FD00,Y			;And the second
 		INY
@@ -3978,7 +4007,8 @@ ORG &8000
 \********************************************************************
 \** ROM Service Call &03 - Auto Boot
 \
-.x9334		JSR prtStr
+.Service03AutoBoot		
+		JSR prtStr
 		EQUS	"RetroClinic RamFS"
 		NOP
 		JSR setSCR
@@ -4239,7 +4269,8 @@ ORG &8000
 \************************************************
 \** Service Entry - Call &01 - Absolute public workspace claim
 \
-.service01	;CMP #&05			;First check interrupts for speed
+.ServiceEnt	CLAIM_DEV
+		;CMP #&05			;First check interrupts for speed
 		;BEQ servIRQ			;If so, go service the IRQ
 		CMP #&25			;Is it a Master Temp Filing System setup?
 		BEQ service25			;Jump to that if so
@@ -4301,7 +4332,7 @@ ORG &8000
 		LDA #&78			;Write the key pressed back into buffer
 		JSR osbyte
 
-.x9489		JMP x9334
+.x9489		JMP Service03AutoBoot
 \
 \************************************************
 \** Service call &04 - Unrecognised * command
@@ -4502,7 +4533,8 @@ ORG &8000
 \************************************************
 \** Start of OSFILE
 \
-.x9572		JSR x83D0
+.MyOSFile	CLAIM_DEV
+		JSR SaveXY
 		PHA
 		JSR staFF_10CF			;?&10CF=&FF
 		STX &B0				;Save address of OSFILE parameter block
@@ -4532,7 +4564,8 @@ ORG &8000
 \************************************************
 \** Start of OSFSC Routine
 \
-.x95A1		CMP #&0B
+.MyOSFsc	CLAIM_DEV
+		CMP #&0B
 		BCS x95A0
 		STX &B5
 		TAX
@@ -4548,8 +4581,8 @@ ORG &8000
 \************************************************
 \** Start of OSGBPB Routine
 \
-.gbpb
-.x95B4
+.MyOSGbpb
+		CLAIM_DEV
 	IF VER<103
 		CMP #&09			;Check call is supported 0-8
 		BCS x95B3			;Exit if not
@@ -4842,7 +4875,7 @@ ORG &8000
 \************************************************
 \** OSGBPB &03 - Get bytes from media using seq pointer
 \
-.x974C		JSR x90C6
+.x974C		JSR MyOSBget
 		BCS x9747
 
 .x9751		JSR set10
@@ -4864,7 +4897,7 @@ ORG &8000
 \** OSGBPB &02 - Put bytes to media using seq pointer
 \
 .x9764		JSR x976C
-		JSR x91AC
+		JSR MyOSBPut
 		CLC
 		RTS
 
@@ -5131,26 +5164,26 @@ ORG &8000
 \** Vectors
 \
 .x9943		EQUW	&FF1B			;&212 - FILEV - All file loads and saves passed thru here
-		EQUW	&FF1E			;&214 - ARGSV - All calls of OSARGS
+		EQUW	&FF1E			;&214 - ARGSV - All calls of MyOSARGS
 		EQUW	&FF21			;&216 - BGETV - Read one byte from a file
 		EQUW	&FF24			;&218 - BPUTV - Put one buyte into a file
 		EQUW	&FF27			;&21A - GBPBV - Get/Put block of bytes into/from a file
 		EQUW	&FF2A			;&21C - FINDV - Open/Close a file
 		EQUW	&FF2D			;&21E - FSCV - Various FS control
 		
-.x9951		EQUW	x9572			;FILEV - OSFILE
+.x9951		EQUW	MyOSFile			;FILEV - OSFILE
 		BRK
-		EQUW	OSargs			;ARGSV - OSARGS
+		EQUW	MyOSargs			;ARGSV - MyOSARGS
 		BRK
-		EQUW	x90C6			;BGETV - OSBGET
+		EQUW	MyOSBget			;BGETV - OSBGET
 		BRK
-		EQUW	x91AC			;BPUTV - OSBPUT
+		EQUW	MyOSBPut			;BPUTV - OSBPUT
 		BRK
-		EQUW	x95B4			;GBPBV - OSGBPB
+		EQUW	MyOSGbpb			;GBPBV - OSGBPB
 		BRK
-		EQUW	x8E78			;FINDV - OSFIND
+		EQUW	MyFindV			;FINDV - OSFIND
 		BRK
-		EQUW	x95A1			;FSCV - OSFSC
+		EQUW	MyOSFsc			;FSCV - OSFSC
 		BRK
 \
 \
@@ -5281,6 +5314,9 @@ ORG &8000
 	ENDIF
 	IF VER=104
 		EQUS	"1.04"
+	ENDIF
+	IF VER=200
+		EQUS	"2.00"
 	ENDIF
 		EQUB	&0D
 		NOP
@@ -6238,7 +6274,7 @@ ORG &8000
 .test_L1	LDA #&08			;Back the cursor off one space
 		JSR prtChrA
 		LDA zpm3
-		STA pageH
+		STA fred_jim_page_hi
 		JSR prtHexA4bit
 		BIT &FF
 		BPL test_J1
@@ -6246,7 +6282,7 @@ ORG &8000
 .test_J1	LDA zpm0
 		LDX #&00
 .test_L2	LDY zpm2
-		STY pageL
+		STY fred_jim_page_hi
 .test_L3	STA &FD00,X			;Loop around &FFFFF bytes
 		INX
 		BNE test_L3
@@ -6271,14 +6307,14 @@ ORG &8000
 .test_L5	LDA #&08
 		JSR prtChrA
 		LDA zpm3
-		STA pageH
+		STA fred_jim_page_hi
 		JSR prtHexA4bit
 		BIT &FF
 		BPL test_J2
 		JMP errEsc		
 .test_J2	LDX #&00
 .test_L6	LDY zpm2
-		STY pageL
+		STY fred_jim_page_hi
 .test_L7	LDA &FD00,X
 		CMP zpm0			;Is it what it should be?
 		BNE test_Fail			;if not, jump to fail
@@ -6736,9 +6772,9 @@ ORG &8000
 		LDA &FD91			;Get first drive
 		JSR mASL2			;Multiply by 4 for RAM page
 		STA zpm4			;And store in RAM copy			
-		STA &FCFE			;And in page register
+		STA fred_jim_page_hi			;And in page register
 		LDA #&10			;Page offset
-		STA &FCFF
+		STA fred_jim_page_lo
 		
 .U_L40		LDX #&00
 .U_L41		JSR uRDbL
@@ -7109,9 +7145,9 @@ ORG &8000
 		LDA &FD91			;Get first drive
 		JSR mASL2			;Multiply by 4 for RAM page
 		STA zpm4
-		STA &FCFE			;Store at MSB RAM address		
+		STA fred_jim_page_hi		;Store at MSB RAM address		
 		LDA #&10
-		STA &FCFF
+		STA fred_jim_page_lo
 
 .U_L60		LDX #&00
 .U_L61		LDA &FD00,X
@@ -7358,42 +7394,42 @@ ORG &8000
 \************************************************
 \** USB Encode and Extract Processing Routines
 \
-.procA		INC &FCFF			;Process side A
+.procA		INC fred_jim_page_lo		;Process side A
 		BNE procRTS			;Increment side A counter
 		INC zpm4			;With carry
 		LDA zpm4			;and return
-		STA &FCFE
+		STA fred_jim_page_hi
 
 .procRTS	RTS
 \
 \
-.procB		INC &FCFF			;Process side B
+.procB		INC fred_jim_page_lo		;Process side B
 		BNE procRTS			;Increment side B counter
 		INC zpm6			;With carry
 		LDA zpm6			;and return
-		STA &FCFE
+		STA fred_jim_page_hi
 		RTS
 \
 \
-.procAB		INC &FCFF			;Process swap from side A to side B
+.procAB		INC fred_jim_page_lo		;Process swap from side A to side B
 		BNE procAB1			;Increment scetor counter
 		INC zpm4			;with carry
 		
-.procAB1	LDA &FCFF			;Going from side A to B we need to back the sector count off by 10
+.procAB1	LDA fred_jim_page_lo		;Going from side A to B we need to back the sector count off by 10
 		SEC
 		SBC #10
-		STA &FCFF			;But we can ignore the carry, as the other side count will still be in sync
+		STA fred_jim_page_lo		;But we can ignore the carry, as the other side count will still be in sync
 		LDA zpm6			;Now store side B counter in MSB of page register
-		STA &FCFE
+		STA fred_jim_page_hi
 		RTS
 \
 \
-.procBA		INC &FCFF			;Process swap from side B to side A
+.procBA		INC fred_jim_page_lo		;Process swap from side B to side A
 		BNE procBA2			;Increment scetor counter
 		INC zpm6			;with carry
 		
 .procBA2	LDA zpm4			;Going from side B to A there is no need to back off sector count
-		STA &FCFE			;But we do now store side A counter MSB in paging resigster
+		STA fred_jim_page_hi			;But we do now store side A counter MSB in paging resigster
 		LDY #&00			;And clear the scetor counter ready for another cycle
 		RTS
 \
@@ -7494,7 +7530,7 @@ ORG &8000
 		BPL checkDFS_X
 		LDA #&00
 		TAY
-		JSR osargs
+		JSR Myosargs
 		CMP #&04
 		BEQ checkDFS_X
 		JSR errARG
@@ -7982,18 +8018,18 @@ ORG &8000
 		STA zpm0
 		LDX #&00
 .lrc_1		LDA zpm0
-		STA &FCFE
+		STA fred_jim_page_hi
 		LDA #&10			;Add 16 page offset for workspace
-		STA &FCFF
+		STA fred_jim_page_lo
 		LDA &FD00,X
 		JSR set0E
 		STA &FD00,X
 		INX
 		BNE lrc_1
 .lrc_2		LDA zpm0
-		STA &FCFE
+		STA fred_jim_page_hi
 		LDA #&11			;Add 16 page offset for workspace
-		STA &FCFF
+		STA fred_jim_page_lo
 		LDA &FD00,X
 		JSR set0F
 		STA &FD00,X
@@ -8027,17 +8063,17 @@ ORG &8000
 		LDA &CF
 		JSR mASL2			;A contains drive number, Multiply by 4 to get RAM page
 		STA zpm0
-		STA &FCFE
+		STA fred_jim_page_hi
 		LDA #&10			;Add 16 page offset for workspace
-		STA &FCFF
+		STA fred_jim_page_lo
 		LDX #&00
 .src_1		JSR set0E
 		LDA &FD00,X
 		TAY
 		LDA zpm0
-		STA &FCFE
+		STA fred_jim_page_hi
 		LDA #&10
-		STA &FCFF
+		STA fred_jim_page_lo
 		TYA
 		STA &FD00,X
 		INX
@@ -8046,9 +8082,9 @@ ORG &8000
 		LDA &FD00,X
 		TAY
 		LDA zpm0
-		STA &FCFE
+		STA fred_jim_page_hi
 		LDA #&11
-		STA &FCFF
+		STA fred_jim_page_lo
 		TYA
 		STA &FD00,X
 		INX
@@ -8152,11 +8188,11 @@ ORG &8000
 		CLC
 		ADC #&10
 		STA &C5
-		STA &FCFF
+		STA fred_jim_page_lo
 		LDA &C4
 		ADC #&00
 		STA &C4
-		STA &FCFE
+		STA fred_jim_page_hi
 		LDY #&00
 		LDX #&00
 		LDA &BF
@@ -8191,11 +8227,11 @@ ORG &8000
 		CLC
 		ADC #&01
 		STA &C5
-		STA &FCFF
+		STA fred_jim_page_lo
 		LDA &C4
 		ADC #&00
 		STA &C4
-		STA &FCFE
+		STA fred_jim_page_hi
 		LDA &C2
 		BNE read_L1
 		LDA &C3
@@ -8210,9 +8246,9 @@ ORG &8000
 		RTS
 		
 .read_gbpb	LDA &C5
-		STA &FCFF
+		STA fred_jim_page_lo
 		LDA &C4
-		STA &FCFE
+		STA fred_jim_page_hi
 		LDA &FD00,Y
 		PHA
 		LDA zpm6
@@ -8322,11 +8358,11 @@ ORG &8000
 		CLC
 		ADC #&10
 		STA &C5
-		STA &FCFF
+		STA fred_jim_page_lo
 		LDA &C4
 		ADC #&00
 		STA &C4
-		STA &FCFE
+		STA fred_jim_page_hi
 		LDY #&00
 		LDX #&00
 		LDA &BF
@@ -8361,11 +8397,11 @@ ORG &8000
 		CLC
 		ADC #&01
 		STA &C5
-		STA &FCFF
+		STA fred_jim_page_lo
 		LDA &C4
 		ADC #&00
 		STA &C4
-		STA &FCFE
+		STA fred_jim_page_hi
 		LDA &C2
 		BNE write_L1
 		LDA &C3
@@ -8384,9 +8420,9 @@ ORG &8000
 		LDA &FD00,Y
 		PHA
 		LDA &C5
-		STA &FCFF
+		STA fred_jim_page_lo
 		LDA &C4
-		STA &FCFE
+		STA fred_jim_page_hi
 		PLA
 		STA &FD00,Y
 		INY
@@ -8631,13 +8667,13 @@ ORG &8000
 \
 .setSCR		PHA
 		LDA #&01
-.setLP		STA &FCFF
+.setLP		STA fred_jim_page_lo
 		LDA #&04
-		STA &FCFE
+		STA fred_jim_page_hi
 		PLA
 		RTS
 		
-.setLPS		STA &FCFF
+.setLPS		STA fred_jim_page_lo
 		PLA
 		RTS
 \
@@ -8648,9 +8684,9 @@ ORG &8000
 
 .setDFS		SEC
 		SBC #&0C
-		STA &FCFF
+		STA fred_jim_page_lo
 		LDA #&04
-		STA &FCFE
+		STA fred_jim_page_hi
 		RTS
 \
 \
@@ -8692,10 +8728,135 @@ ORG &8000
 		
 .setERR		PHA
 		LDA #&FF
-		STA &FCFE
-		STA &FCFF
+		STA fred_jim_page_hi
+		STA fred_jim_page_lo
 		PLA
 		RTS
+
+IF VER >= 200
+\
+\*************************************************
+\** NEW JIM API routines
+\		
+	; on all entry points the current device number held at 
+	; zp_mos_jimdevsave &EE needs to be saved and our device number set
+	; in zp_mos_jimdevsave and fred_jim_DEVNO to enable the JIM memory
+	; interface used for ramdiscs and scratch space
+
+	; This routine will install a phoney return address on the stack it should
+	; be called at service call / event handler entry point and will rearrange
+	; the stack such that an RTS from the caller routine will call DoReleaseDev
+	; before returning to the service routine caller
+.DoClaimDev
+		PHP					; make room on stack for phoney return to DoReleaseDev and saved devno
+		PHP
+		PHP
+		PHP					; save flags
+		PHA					; save A and flags
+		TXA
+		PHA					; save X
+
+		; stack is now
+
+		; SP + A	service return hi
+		; SP + 9	service return lo
+		; SP + 8	caller hi
+		; SP + 7	caller lo
+		; SP + 6	spare
+		; SP + 5	spare
+		; SP + 4	spare
+		; SP + 3	caller flags save
+		; SP + 2	caller A save
+		; SP + 1	caller X save
+		; SP + 0	TOS
+
+
+		LDA	zp_mos_jimdevsave		; get current callers device #
+		PHA
+		LDA	#JIM_DEVNO
+		STA	zp_mos_jimdevsave		; set to our device
+		STA	fred_jim_devno
+		JSR	setSCR				; page in scratch page
+		PLA	
+		STA	SCRATCH_DEVSAVE			; store caller's device #
+
+		TSX		
+		LDA	$107,X				; get caller lo
+		STA	$104,X				; move down to new location
+		LDA	$108,X				; get caller hi
+		STA	$105,X				; move down to new location
+		LDA	#LO(DoReleaseDev-1)
+		STA	$106,X				; add DoReleaseDev into stack
+		LDA	#HI(DoReleaseDev-1)
+		STA	$107,X				; add DoReleaseDev into stack
+
+		LDA	SCRATCH_DEVSAVE
+		STA	$108,X
+
+		; stack is now
+
+		; SP + A	service return hi
+		; SP + 9	service return lo
+		; SP + 8	Saved devno
+		; SP + 7	Release hi
+		; SP + 6	Release lo
+		; SP + 5	caller hi
+		; SP + 4	caller lo
+		; SP + 3	caller flags save
+		; SP + 2	caller A save
+		; SP + 1	caller X save
+		; SP + 0	TOS
+
+
+		PLA
+		TAX
+		PLA
+		PLP
+		RTS
+.DoReleaseDev
+		PHP
+		PHA
+		TXA
+		PHA
+
+		; SP + 6	return hi
+		; SP + 5	return lo
+		; SP + 4	saved devno
+		; SP + 3	saved flags
+		; SP + 2	saved A
+		; SP + 1	saved X
+		; SP + 0	TOS
+
+		TSX
+		LDA	$104,X
+
+		STA	zp_mos_jimdevsave		; set to saved caller's dev no
+		STA	fred_jim_devno
+
+		LDA	$103,X
+		STA	$104,X				; overwrite devno with saved flags
+
+		PLA
+		TAX
+		PLA
+		PLP					
+		PLP
+		RTS
+
+.DoReleaseDevBrk
+		PHA
+		LDA	#JIM_DEVNO
+		STA	zp_mos_jimdevsave
+		STA	fred_jim_devno
+		JSR	setSCR
+		LDA	SCRATCH_DEVSAVE
+		STA	zp_mos_jimdevsave
+		STA	fred_jim_devno
+		PLA
+		RTS			
+
+
+ENDIF
 
 	IF VER>100
         .osw77_Read
@@ -8790,7 +8951,7 @@ ORG &8000
         PLA:JMP &406
         .gbpbCall
         CMP #9:BCS gbpbDone
-        JSR gbpb+4
+        JSR gbpb_04
         BIT &FD81:BPL gbpbDone
         PHP:PHA:JSR TubeRelease2
         PLA:PLP
@@ -8831,5 +8992,8 @@ SAVE "RAMFS103.bin", ROMstart, ROMend
 ENDIF
 IF VER=104
 SAVE "RAMFS104.bin", ROMstart, ROMend
+ENDIF
+IF VER=200
+SAVE "RAMFS200.bin", ROMstart, ROMend
 ENDIF
 

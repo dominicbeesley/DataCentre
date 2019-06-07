@@ -1,0 +1,71 @@
+NET "BUS1M_CLK_1M"  LOC = "P22"  ; 
+
+NET "BUS1M_A[0]"  LOC = "P90"  ; 
+NET "BUS1M_A[1]"  LOC = "P91"  ; 
+NET "BUS1M_A[2]"  LOC = "P92"  ; 
+NET "BUS1M_A[3]"  LOC = "P93"  ; 
+NET "BUS1M_A[4]"  LOC = "P94"  ; 
+NET "BUS1M_A[5]"  LOC = "P95"  ; 
+NET "BUS1M_A[6]"  LOC = "P96"  ; 
+NET "BUS1M_A[7]"  LOC = "P97"  ; 
+
+NET "BUS1M_D[0]"  LOC = "P78"  ; 
+NET "BUS1M_D[1]"  LOC = "P79"  ; 
+NET "BUS1M_D[2]"  LOC = "P81"  ; 
+NET "BUS1M_D[3]"  LOC = "P82"  ; 
+NET "BUS1M_D[4]"  LOC = "P85"  ; 
+NET "BUS1M_D[5]"  LOC = "P86"  ; 
+NET "BUS1M_D[6]"  LOC = "P87"  ; 
+NET "BUS1M_D[7]"  LOC = "P89"  ; 
+
+NET "BUS1M_nIRQ"  LOC = "P74"  ;
+NET "BUS1M_nPGFC"  LOC = "P76"  ; 
+NET "BUS1M_nPGFD"  LOC = "P77"  ; 
+NET "BUS1M_nRST"  LOC = "P99"  ; 
+NET "BUS1M_RnW"  LOC = "P71"  ; 
+
+
+
+NET "RAM_A[16]"  LOC = "P40"  ; 
+NET "RAM_A[17]"  LOC = "P41"  ; 
+NET "RAM_A[18]"  LOC = "P42"  ; 
+NET "RAM_A[19]"  LOC = "P49"  ; 
+NET "RAM_A[10]"  LOC = "P32"  ; 
+NET "RAM_A[11]"  LOC = "P33"  ; 
+NET "RAM_A[12]"  LOC = "P35"  ; 
+NET "RAM_A[13]"  LOC = "P36"  ; 
+NET "RAM_A[14]"  LOC = "P37"  ; 
+NET "RAM_A[15]"  LOC = "P39"  ; 
+NET "RAM_A[8]"  LOC = "P29"  ; 
+NET "RAM_A[9]"  LOC = "P30"  ; 
+NET "RAM_nCE"  LOC = "P52"  ; 
+NET "RAM_nOE"  LOC = "P28"  ; 
+NET "RAM_nWE"  LOC = "P50"  ; 
+
+
+NET "IDE_DRQa"  LOC = "P17"  ; 
+NET "IDE_D[8]"  LOC = "P1"  ; 
+NET "IDE_D[9]"  LOC = "P6"  ; 
+NET "IDE_D[10]"  LOC = "P8"  ; 
+NET "IDE_D[11]"  LOC = "P9"  ; 
+NET "IDE_D[12]"  LOC = "P10"  ; 
+NET "IDE_D[13]"  LOC = "P11"  ; 
+NET "IDE_D[14]"  LOC = "P12"  ; 
+NET "IDE_D[15]"  LOC = "P13"  ; 
+NET "IDE_nCS0"  LOC = "P16"  ; 
+NET "IDE_nCS1"  LOC = "P18"  ; 
+NET "IDE_nRD"  LOC = "P15"  ; 
+NET "IDE_nWR"  LOC = "P14"  ; 
+NET "IDE_nIRQ" LOC = "P27" ;
+
+
+
+NET "VINC_nDACK"  LOC = "P63"  ; 
+NET "VINC_nDREQ"  LOC = "P61"  ; 
+NET "VINC_nRD"  LOC = "P67"  ; 
+NET "VINC_nRXF"  LOC = "P66"  ; 
+NET "VINC_nTXE"  LOC = "P64"  ; 
+NET "VINC_WR"  LOC = "P68"  ; 
+
+NET "EEPROM_SCL"  LOC = "P25"  ; 
+NET "EEPROM_SDA"  LOC = "P20"  ; 
