@@ -1,0 +1,197 @@
+1 MHz Bus - JIM page-wide access revised protcol
+================================================
+
+rev 0.4 20190607
+        New DataCentre/RAMFS200
+rev 0.3 20190531
+        Device registers in JIM;
+rev 0.2 20190530
+        Added JIM boot; Minor textual corrections; added beebex-1
+rev 0.1 20190528
+        Typos and corrections from Hoglet; Explain &EE usage; Outline original
+        App note, include URL; Add M3000 devno; Add Sprow RAM disc; rule R6
+        added
+rev 0.0 20190528
+        New document
+
+Abstract
+========
+
+The 1MHz Bus for the BBC Micro Computer Systems has a facility for providing an
+extended addressing scheme using a per-device 8-bit latch (&FCFF) and a page of 
+address space "JIM" at &FD00-&FDFF. [This is also available via the Electron and 
+Master cartridge interface]. See the app note below for more details of JIM and 
+FRED memory mapped devices.
+
+The application notes and documentation from Acorn have been, over the years,
+been interpreted by different hardware implementers in a number of contradictory
+ways which has led to compatibility issues between devices.
+
+This document sets out a set of rules which if followed will allow 
+interoperability between new hardware that follows these rules and some existing
+devices that follow some (if not all) of these rules.
+
+It is hoped that this document will be followed to allow new devices to be 
+mutually compatible. This is more pressing than ever with the likely 
+proliferation of devices enabled by the various FPGA, RPI and breakout boards 
+for the 1MHz bus and cartridge slots.
+
+This specification does not attempt to cover aspects of the 1MHz bus other than
+those related to JIM interoperability.
+
+It is also hoped that address clashes in FRED may be avoided by devices 
+presenting their main registers in JIM rather than FRED. 
+
+Original App Note
+=================
+
+The Acorn Applaication Note 003 iss 1 from 16th Jan 1992 outlines a scheme much
+like the one proposed below but does not make explicit how devices should 
+interoperate. 
+
+[http://chrisacorns.computinghistory.org.uk/docs/Acorn/AN/003.pdf]
+
+Proposal
+========
+
+The following rules if followed allow interoperability including interrupt 
+driven devices and drivers.
+
+Note: there is no provision in these rules for two processes (i.e. current 
+language and an interrupt routine device driver) to access the same device at 
+the same time. That would require device/application specific rules for 
+preservation of any extended paging registers and is beyond the scope of this
+protocol.
+
+Rules
+=====
+
+Definitions
+-----------
+A)      &FCFF is treated as a “device select latch” rather than a paging 
+        register, the registers from FCFE downwards may, optionally, be used 
+        to select a page within a device's address space and operate as 
+        "extended paging registers"
+B)      &FCFE...&FCFC extended paging registers within the device's address 
+        space.
+C)      Zero page register &EE is used as a shadow register for &FCFF (much like
+        &F4 for the ROM paging register).
+
+Required rules
+--------------
+
+R1)     Devices MUST only respond to JIM accesses if their device no. has been 
+        written to FCFF. Any writes to FCFF of non matching device numbers must 
+        deselect the device.
+R2)     Drivers MUST save EE before writing either EE or FCFF
+R3)     Drivers MUST write EE BEFORE writing FCFF
+R4)     Foreground tasks MUST write EE before writing FCFF
+R5)     Interrupt drivers MUST restore FCFF from saved EE after use
+R6)     All devices shall be normally deselected at boot **subject to O7**
+
+
+Optional rules
+--------------
+
+O1)     Devices MAY offer read access to FCFF but MUST ONLY do so when they have
+        been enabled and MUST return their device no complimented 
+        [this allow probes for hardware]
+O2)     Additional paging registers may be added should there be a need for an 
+        address space > 256 bytes in JIM. By convention the paging registers are
+        at FCFE downwards. The paging registers may be at other addresses if 
+        desired. 
+O3)     Devices SHOULD ignore writes to paging registers at FCFE down
+        unless FCFF has been set with their unique dev no. 
+        [Devices may ignore this but then any interrupt could corrupt the 
+        registers so any code that uses JIM would need to disable interrupts 
+        and not cause NMIs to be safe]
+O4)     Devices MAY offer read access to their paging register(s) but ONLY when 
+        they have been enabled if they are at FCFE down
+O5)     For preferance devices SHOULD only resond to a single device number to
+        preserve address space. 
+O6)     Drivers may (subject to allocation) partially decode the FCFF register
+        and hence respond to a range of addresses. However, this is strongly
+        discouraged to preserve address space.
+O7)     A single device on the bus MAY select itself on reset and hold the IRQ
+        line low to initiate a "JIM boot" whereby the device supplies a vector
+        at &FDFE. A device that implements JIM boot must:
+                - ensure it is the only device to do so
+                - provide a user interface (jumper/button) to enable the 
+                  function
+O8)     Devices SHOULD preferably present their other hardware registers within
+        their JIM (possibly extended) address space. This would preserve space
+        in the FRED region and increase interoperability.
+
+Queries
+-------
+?)      Endianness: should the convention for paging registers be big-endian or 
+        little endian. I suspect big endian as that matches current usage for
+        DC, Xload/Xsave? Also, this logically follows as extended address spaces
+        extend from 8, 16, 24 to 32 bits.
+?)      Use of EE: the location EE gets used by the MOS during the keyboard 
+        routines for 3-key rollover. However, it is only ever read by the MOS
+        and experimentation has shown that no ill effects occur when it is 
+        written. However, this has not been 100% confirmed. The M5000's maturity
+        would seem to bear this out.
+
+
+Appendix A - device no.s
+========================
+
+00-1F   Avoid - current DC / RAMFS implementations crash this region         
+30-3F   Music 5000
+50-5F   Music 3000
+D0      Dossytronics 1M Paula Board for Hoglet 1MHz bus/FPGA
+D1      Dossytronics CPU / Blitter board 
+DC      NEW: Updated DC firmware RAMFS 2.00
+F0-FE   Reserved for future extended addressing
+FF      Reserved as a safe "disable" device number
+
+
+Appendix B - current / legacy interpretations
+=============================================
+
+Some brief notes appear below on existing non-conformant or partially conformant
+hardware.
+
+DataCentre / RAMFS 1.00, 1.01, 1.02, 1.03, 1.04
+-----------------------------------------------
+Non conformant: breaks rules R1, R2, R3, R4, R5
+
+The RAMFS roms write to memory in the 00-1F device ranges.
+The DC responds to any addresses causing any writes by any other device drivers
+to any addresses to potentially corrupt DC memory.
+
+Status: Actively looking to have a firmware update to address this in 2019
+
+DataCentre / RAMFS 2.00
+-----------------------
+Conforms to rules R1, R2, R3, R4, R5, R6, O1, O2, O3, O4, O5
+
+This is still in testing: Known issues EEPROM registers at FCFA-FCFC
+
+
+Music 5000/3000 / Ample
+-----------------------
+Conforms to rules R1, R2, R3, R4, R5. 
+
+The M5000 appears to only respond to read/writes in the range 30-3F.
+The Ample ROM already preserves FCFF in EE as per the Acorn App Note.
+
+The M3000 behaviour has not been fully verified yet.
+
+Dossytronics Blitter, Paula
+---------------------------
+Conforms to all rules and options O1, O2, O3, O4, O5
+
+Control Universal BEEBEX
+------------------------
+Non conformant: possibly nonconformant depending on attached device
+
+Sprow RAM disc
+--------------
+Unknown - unlikely to conform from description and an inspection of a 
+disassembly of RAMFS 1.20
+
+Others...?
+----------
