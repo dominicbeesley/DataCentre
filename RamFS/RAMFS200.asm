@@ -8778,7 +8778,10 @@ IF VER >= 200
 		STA	fred_jim_devno
 		JSR	setSCR				; page in scratch page
 		PLA	
+		CMP	#JIM_DEVNO
+		BEQ	NoScratchSave			; recursively got here somehow don't overwrite original caller in case of BRK
 		STA	SCRATCH_DEVSAVE			; store caller's device #
+.NoScratchSave:
 
 		TSX		
 		LDA	$107,X				; get caller lo
