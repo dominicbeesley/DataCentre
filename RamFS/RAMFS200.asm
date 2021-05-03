@@ -8773,28 +8773,58 @@ IF VER >= 200
 
 		LDA	zp_mos_jimdevsave		; get current callers device #
 		PHA
+
 		LDA	#JIM_DEVNO
 		STA	zp_mos_jimdevsave		; set to our device
 		STA	fred_jim_devno
-		JSR	setSCR				; page in scratch page
+
+		JSR	setSCR
+
 		PLA	
-		CMP	#JIM_DEVNO
-		BEQ	NoScratchSave			; recursively got here somehow don't overwrite original caller in case of BRK
-		STA	SCRATCH_DEVSAVE			; store caller's device #
-.NoScratchSave:
+		PHA
+		STA	SCRATCH_DEVSAVE			; used in case of BRK - NOTE: this won't be present if DC is not present!
+
+
+		; SP + B	service return hi
+		; SP + A	service return lo
+		; SP + 9	caller hi
+		; SP + 8	caller lo
+		; SP + 7	spare
+		; SP + 6	spare
+		; SP + 5	spare
+		; SP + 4	caller flags save
+		; SP + 3	caller A save
+		; SP + 2	caller X save
+		; SP + 1	caller DEVNO
+		; SP + 0	TOS
+
 
 		TSX		
-		LDA	$107,X				; get caller lo
-		STA	$104,X				; move down to new location
-		LDA	$108,X				; get caller hi
+		LDA	$108,X				; get caller lo
 		STA	$105,X				; move down to new location
+		LDA	$109,X				; get caller hi
+		STA	$106,X				; move down to new location
 		LDA	#LO(DoReleaseDev-1)
-		STA	$106,X				; add DoReleaseDev into stack
-		LDA	#HI(DoReleaseDev-1)
 		STA	$107,X				; add DoReleaseDev into stack
+		LDA	#HI(DoReleaseDev-1)
+		STA	$108,X				; add DoReleaseDev into stack
 
-		LDA	SCRATCH_DEVSAVE
-		STA	$108,X
+
+		; SP + B	service return hi
+		; SP + A	service return lo
+		; SP + 9	caller hi
+		; SP + 8	release hi
+		; SP + 7	release lo
+		; SP + 6	caller hi
+		; SP + 5	caller lo
+		; SP + 4	caller flags save
+		; SP + 3	caller A save
+		; SP + 2	caller X save
+		; SP + 1	caller DEVNO
+		; SP + 0	TOS
+
+		PLA
+		STA	$109,X
 
 		; stack is now
 
