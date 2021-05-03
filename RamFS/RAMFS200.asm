@@ -87,7 +87,11 @@ ORG &8000
 		JMP	ServiceEnt
 		EQUB	&82
 		EQUB	LO(cpyMsg)
+	IF VER>200
+		EQUB	&20
+	ELSE
 		EQUB	&10			;Version number 1.0x
+	ENDIF
 		EQUS	"RamFS"
 		BRK
 	IF VER=100
@@ -106,7 +110,7 @@ ORG &8000
 		EQUS	"1.04 (30 May 2016)"
 	ENDIF
 	IF VER=200
-		EQUS	"2.00 (6 June 2019)"
+		EQUS	"2.01 (3 May 2021)"
 	ENDIF
 .cpyMsg		BRK
 		EQUS	"(C)RetroClinic"
@@ -5316,7 +5320,7 @@ ORG &8000
 		EQUS	"1.04"
 	ENDIF
 	IF VER=200
-		EQUS	"2.00"
+		EQUS	"2.01"
 	ENDIF
 		EQUB	&0D
 		NOP
