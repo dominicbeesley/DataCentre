@@ -1,13 +1,13 @@
 VERSIONS=	100 101 102 103 104 200
-TARGETS=	$(addprefix ramfs,$(VERSIONS))
-SRC=		ramfs200.asm
+TARGETS=	$(addprefix RAMFS,$(VERSIONS))
+SRC=		RAMFS200.asm
 
 all::	$(addsuffix .bin, $(TARGETS))
 
 $(addsuffix .bin, $(TARGETS)): $(SRC)
 
-ramfs%.bin: 
-		beebasm -i $(SRC) -D VER=$* -d -v >ramfs$*.lst
+RAMFS%.bin:
+		beebasm -i $(SRC) -D VER=$* -d -v >RAMFS$*.lst
 
 
 clean::
