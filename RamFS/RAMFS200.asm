@@ -25,9 +25,14 @@ lastDrv		= &CF				;Last drive accessed
 vdip		= &FCF8
 vdipS		= &FCF9
 
-fred_jim_devno	= &FCFF
+IF VER >= 200
+fred_jim_devno = &FCFF
 fred_jim_page_lo= &FCFE
 fred_jim_page_hi= &FCFD
+ELSE
+fred_jim_page_lo= &FCFF
+fred_jim_page_hi= &FCFE
+ENDIF
 
 \ Other Vectors
 
@@ -6286,7 +6291,7 @@ ORG &8000
 .test_J1	LDA zpm0
 		LDX #&00
 .test_L2	LDY zpm2
-		STY fred_jim_page_hi
+		STY fred_jim_page_lo
 .test_L3	STA &FD00,X			;Loop around &FFFFF bytes
 		INX
 		BNE test_L3
@@ -6318,7 +6323,7 @@ ORG &8000
 		JMP errEsc		
 .test_J2	LDX #&00
 .test_L6	LDY zpm2
-		STY fred_jim_page_hi
+		STY fred_jim_page_lo
 .test_L7	LDA &FD00,X
 		CMP zpm0			;Is it what it should be?
 		BNE test_Fail			;if not, jump to fail
